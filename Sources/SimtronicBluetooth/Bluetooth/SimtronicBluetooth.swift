@@ -95,6 +95,33 @@ public class SimtronicBluetooth: NSObject {
         return nil
     }
     
+    
+    
+    // MARK: - Functions
+    
+    public func writeToNode() {
+        
+        guard let service = service(withUUID: SimtronicBluetooth.serviceUUID), let characterisitc = characteristic(forService: service, withCharacteristicUUID: SimtronicBluetooth.outBoundCharacteristic.uuid) else {
+            return
+        }
+        
+        guard let peripheral = connectedDevice else {
+            return
+        }
+        
+        var bytes: [UInt8] = [0x0a,0x00,0x00]
+        
+        peripheral.writeValue(Data(bytes), for: characterisitc, type: .withResponse)
+    }
+    
+    func readFromNode(data: Data) {
+        
+        print(data)
+        
+        print([UInt8](data))
+    }
+    
+    
 }
 
 public protocol DeviceDelegate {
@@ -120,42 +147,41 @@ extension SimtronicBluetooth: CBPeripheralDelegate {
             return
         }
         
+        print("peripheral \(peripheral.description), \(peripheral.identifier)")
+        
         for service in services {
             peripheral.discoverCharacteristics(characteristicIDs, for: service)
+            print("service \(service.description)")
         }
     }
     
     
     public func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
         
-    }
-    
-    
-    public func peripheral(_ peripheral: CBPeripheral, didDiscoverDescriptorsFor characteristic: CBCharacteristic, error: Error?) {
-        guard let descriptors = characteristic.descriptors else {
+        guard let characteristics = service.characteristics else {
             return
         }
         
-        for descriptor in descriptors {
-            peripheral.readValue(for: descriptor)
+        for characteristic in characteristics {
+            print("\(characteristic.description)")
+            peripheral.setNotifyValue(true, for: characteristic)
         }
-    }
-    
-    
-    public func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor descriptor: CBDescriptor, error: Error?) {
-        
     }
     
     public func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
         
+        print("updated")
+        
+        guard let data = characteristic.value else {
+            return
+        }
+        
+        readFromNode(data: data)
     }
     
     public func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
         
-    }
-    
-    public func peripheral(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: Error?) {
-        
+        print("didWrite")
     }
     
 }
@@ -178,12 +204,28 @@ extension SimtronicBluetooth: CBCentralManagerDelegate {
     }
     
     public func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber) {
+        
         DispatchQueue.main.async { [weak self] in
-            guard self?.devices.first(where: { $0.identifier == peripheral.identifier }) == nil else { return }
+            
+            guard self?.devices.first(where: { $0.identifier == peripheral.identifier }) == nil else {
+                return
+            }
+            
+            guard let data = advertisementData["kCBAdvDataManufacturerData"] as? Data else {
+                return
+            }
+            
+            let manufactureID = UInt16(data[0]) + UInt16(data[1]) << 8
+            
+            let manufactureName = String(format: "%04X", manufactureID)
+            
+            guard manufactureName == "06C6" else {
+                return
+            }
+            
             self?.devices.append(peripheral)
             self?.delegate.didDetect(devices: self?.devices ?? [])
         }
-
     }
     
     public func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
@@ -251,7 +293,14 @@ extension SimtronicBluetooth {
 extension SimtronicBluetooth {
     
     static let serviceUUID = CBUUID(string: "3f298ab4-20e3-91c6-8dd8-2903cc2fa70b")
-    static let inBoundCharacteristic = Characteristic(uuid: CBUUID(string: "424f00a7-c936-0250-32be-9d7ee4161a14"), descriptorUUID: nil)
-    static let outBoundCharacteristic = Characteristic(uuid: CBUUID(string: "0fc84852-5785-4c94-ef7b-f6a055d94531"), descriptorUUID: nil)
+    static let inBoundCharacteristic = Characteristic(uuid: CBUUID(string: "0fc84852-5785-4c94-ef7b-f6a055d94531"), descriptorUUID: nil)
+    static let outBoundCharacteristic = Characteristic(uuid: CBUUID(string: "424f00a7-c936-0250-32be-9d7ee4161a14"), descriptorUUID: nil)
 }
 
+extension Data {
+    var stringEncoding: String.Encoding? {
+        var nsString: NSString?
+        guard case let rawValue = NSString.stringEncoding(for: self, encodingOptions: nil, convertedString: &nsString, usedLossyConversion: nil), rawValue != 0 else { return nil }
+        return .init(rawValue: rawValue)
+    }
+}

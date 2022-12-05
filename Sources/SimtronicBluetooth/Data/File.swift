@@ -13,7 +13,7 @@ class Accesspoint {
     var rssi: Int?
     var timeTolive: Int?
     var mac: [UInt8] = Array(repeating: 0x00, count: 6)
-    var macString = ""
+    var id: UUID = UUID()
     var connectionTarget: Bool?
     
     var jobNo: Int?
@@ -27,7 +27,7 @@ class Accesspoint {
 class ReportedAccesspoint {
     
     var rssi: Int = 0
-    var macString = ""
+    var id: UUID = UUID()
     var index = 0
     var jobNo: Int?
     var spxAddr: Int?

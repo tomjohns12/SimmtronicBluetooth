@@ -8,6 +8,7 @@
 
 import Foundation
 import CoreBluetooth
+import CryptoKit
 
 public class SimtronicBluetooth: NSObject {
     
@@ -36,6 +37,23 @@ public class SimtronicBluetooth: NSObject {
     
     var keyNoToTry: Int = 0
     var authChallengeMessage: [UInt8] = []
+    var deviceFirmwareBuildNumber: UInt8 = 0x00
+    
+    var expectedMiscDataStoreIntegrityNumber: UInt8?
+    var expectedMiscDataStoreBlockNo: Int = 0
+    var miscDataStoreString = ""
+    
+    var expectedAreaNameIntegrityNumber: UInt8?
+    var expectedAreaNameBlockNo: Int = 0
+    var areaNameString = ""
+    
+    var expectedAccessKeyIntegrityNumber: UInt8?
+    var expectedAccessKeysBlockNo: Int = 0
+    var accessKeysString = ""
+    
+    var expectedAccessMapIntegrityNumber: UInt8?
+    var expectedAccessMapBlockNo: Int = 0
+    var accessMapString = ""
     
     var accessPoint: APdata?
     
@@ -113,6 +131,20 @@ public class SimtronicBluetooth: NSObject {
     
     // MARK: - Functions
     
+    func connected(_ peripheral: CBPeripheral) {
+        
+        state = .connected
+        
+        
+        
+        accessPoint = APdata(id: peripheral.identifier)
+        
+        state = .awaitingInfoReply
+        getMessage = .queryDeviceInfo
+        sendGetMessage()
+        
+    }
+    
     public func writeToNode(index: Int, configRotate: Int, cmd: Int) {
         
 //        var bytes: [UInt8] = [0x0a,0x00,0x00]
@@ -157,6 +189,8 @@ public class SimtronicBluetooth: NSObject {
         
         
         switch state {
+        case .connected:
+            break
         case .awaitingInfoReply:
             readInfoReply(bytes: bytes)
         case .awaitingCompatReply:
@@ -167,10 +201,32 @@ public class SimtronicBluetooth: NSObject {
             readAuthResult(bytes: bytes)
         case .awaitingSpxSystemTime:
             readSPXSystemTime(bytes: bytes)
+        case .awaitingIdentifyAck:
+            break
         case .awaitingMiscDataStartIntegReply:
             readMiscDataStartIntegReply(bytes: bytes)
         case .awaitingMiscDataBlock:
             readMiscDataBlockReply(bytes: bytes)
+        case .awaitingMiscDataEndIntegReply:
+            readMiscDataEndIntegReply(bytes: bytes)
+        case .awaitingAreaNameStartIntegReply:
+            readAreaNameStartIntegReply(bytes: bytes)
+        case .awaitingAreaNameBlock:
+            readAreaNameBlockReply(bytes: bytes)
+        case .awaitingAreaNameEndIntegReply:
+            readAreaNameEndIntegReply(bytes: bytes)
+        case .awaitingKeysStartIntegReply:
+            readKeysStartIntegReply(bytes: bytes)
+        case .awaitingAccesKeysBlock:
+            readAccessKeysBlockReply(bytes: bytes)
+        case .awaitingKeysEndIntegReply:
+            readKeysEndIntegReply(bytes: bytes)
+        case .awaitingMapStartIntegReply:
+            readMapsStartIntegReply(bytes: bytes)
+        case .awaitingAccessMapBlock:
+            readAccessMapsBlockReply(bytes: bytes)
+        case .awaitingMapEndIntegReply:
+            readMapsEndIntegReply(bytes: bytes)
         }
         
     }
@@ -186,7 +242,7 @@ public class SimtronicBluetooth: NSObject {
             
             if deviceType == 0x01 {
                 
-                var deviceFirmwareBuildNumber = bytes[2] << 24
+                deviceFirmwareBuildNumber = bytes[2] << 24
                 deviceFirmwareBuildNumber += bytes[3] << 16
                 deviceFirmwareBuildNumber += bytes[4] << 8
                 deviceFirmwareBuildNumber += bytes[5]
@@ -313,6 +369,9 @@ public class SimtronicBluetooth: NSObject {
         
     }
     
+    
+    // MARK: Misc Data
+    
     func readMiscDataStartIntegReply(bytes: [UInt8]) {
         
         if bytes[0] == 0x03 {
@@ -326,26 +385,379 @@ public class SimtronicBluetooth: NSObject {
                 if integrityNumber == 0xff {
                     // diconnect
                 } else if echoedByte == 0x01 {
-                    let expectedMiscDataStoreIntegrityNumber = integrityNumber;
-                    let expectedMiscDataStoreBlockNo = 0;
-//                    miscDataStoreString = "";
+                    expectedMiscDataStoreIntegrityNumber = integrityNumber
+                    expectedMiscDataStoreBlockNo = 0
+                    miscDataStoreString = ""
                     state = .awaitingMiscDataBlock
                     getMessage = .miscDataStoreBlock(echoedByte: (expectedMiscDataStoreBlockNo & 0xff), blockNo: expectedMiscDataStoreBlockNo)
                     sendGetMessage()
                 }
                 
-                
             }
-            
         }
-        
     }
     
     func readMiscDataBlockReply(bytes: [UInt8]) {
         
-        
-        
+        if bytes[0] == 0x03 {
+            
+            if bytes[1] == 0x09 {
+                
+                let echoedByte = bytes[2]
+                let blockLength = bytes[3]
+                
+                if echoedByte == UInt8(expectedMiscDataStoreBlockNo & 0xff) {
+                    
+                    for i in 0..<blockLength {
+                        miscDataStoreString += [Character(UnicodeScalar(bytes[4 + Int(i)]))]
+                    }
+                    
+                    if blockLength < 16 {
+                        state = .awaitingMiscDataEndIntegReply
+                        getMessage = .miscDataStoreIntegrityNoAtEnd
+                        sendGetMessage()
+                    } else {
+                        expectedMiscDataStoreBlockNo += 1
+                        getMessage = .miscDataStoreBlock(echoedByte: (expectedMiscDataStoreBlockNo & 0xff), blockNo: expectedMiscDataStoreBlockNo)
+                        sendGetMessage()
+                    }
+                }
+            }
+        }
     }
+    
+    func readMiscDataEndIntegReply(bytes: [UInt8]) {
+        
+        if bytes[0] == 0x03 {
+            
+            if bytes[1] == 0x09 {
+                
+                var integrityNumber = bytes[3]
+                integrityNumber = (integrityNumber & 0xff)
+                
+                let echoedByte = bytes[2]
+                
+                if integrityNumber == 0xff {
+                    // disconnect
+                } else if echoedByte == 0x02 {
+                    if integrityNumber == expectedMiscDataStoreIntegrityNumber {
+                        print("MiscData transfer Complete")
+                        accessPoint?.miscData = miscDataStoreString
+                        state = .awaitingAreaNameStartIntegReply
+                        getMessage = .areaNameIntegrityNoAtStart
+                        sendGetMessage()
+                    } else {
+                        state = .awaitingMiscDataStartIntegReply
+                        getMessage = .miscDataStoreIntegrityNoAtStart
+                        sendGetMessage()
+                    }
+                }
+            }
+        }
+    }
+    
+    
+    // MARK: Area Name
+    
+    func readAreaNameStartIntegReply(bytes: [UInt8]) {
+        
+        if bytes[0] == 0x03 {
+            
+            if bytes[1] == 0x04 {
+                
+                var integrityNumber = bytes[3]
+                let echoedByte = bytes[2]
+                
+                if integrityNumber == 0xff {
+                    getMessage = .areaNameIntegrityNoAtStart
+                    sendGetMessage()
+                } else if echoedByte == 0x01 {
+                    expectedAreaNameIntegrityNumber = integrityNumber
+                    expectedAreaNameBlockNo = 0
+                    areaNameString = ""
+                    state = .awaitingAreaNameBlock
+                    getMessage = .areaNameBlock(echoedByte: (expectedAreaNameBlockNo & 0xff), byteOffset: expectedAreaNameBlockNo)
+                    sendGetMessage()
+                }
+            }
+        }
+    }
+    
+    func readAreaNameBlockReply(bytes: [UInt8]) {
+        
+        if bytes[0] == 0x03 {
+            
+            if bytes[1] == 0x05 {
+                
+                let echoedByte = bytes[2]
+                let blockLength = bytes[3]
+                
+                if echoedByte == UInt8(expectedAreaNameBlockNo & 0xff) {
+                    
+                    for i in 0..<blockLength {
+                        areaNameString += [Character(UnicodeScalar(bytes[4 + Int(i)]))]
+                    }
+                    
+                    if blockLength < 16 {
+                        state = .awaitingAreaNameEndIntegReply
+                        getMessage = .areaNameIntegrityNoAtEnd
+                        sendGetMessage()
+                    } else {
+                        expectedMiscDataStoreBlockNo += 16
+                        getMessage = .areaNameBlock(echoedByte: (expectedAreaNameBlockNo & 0xff), byteOffset: expectedAreaNameBlockNo)
+                        sendGetMessage()
+                    }
+                }
+            }
+        }
+    }
+    
+    func readAreaNameEndIntegReply(bytes: [UInt8]) {
+        
+        if bytes[0] == 0x03 {
+            
+            if bytes[1] == 0x04 {
+                
+                var integrityNumber = bytes[3]
+                let echoedByte = bytes[2]
+                
+                if integrityNumber == 0xff {
+                    state = .awaitingAreaNameStartIntegReply
+                    getMessage = .areaNameIntegrityNoAtStart
+                } else if echoedByte == 0x02 {
+                    if integrityNumber == expectedAreaNameIntegrityNumber {
+                        print("Area Name transfer Complete: \(areaNameString)")
+                        accessPoint?.areaName = areaNameString
+                        if deviceFirmwareBuildNumber < 16 {
+                            state = .awaitingAreaNameStartIntegReply
+                            getMessage = .accessMapIntegrityNoAtStart
+                        } else {
+                            state = .awaitingAreaNameStartIntegReply
+                            getMessage = .accessKeysIntegrityNoAtStart
+                        }
+                    } else {
+                        state = .awaitingAreaNameStartIntegReply
+                        getMessage = .areaNameIntegrityNoAtStart
+                    }
+                }
+                
+                sendGetMessage()
+            }
+        }
+    }
+    
+    
+    // MARK: Keys
+    
+    func readKeysStartIntegReply(bytes: [UInt8]) {
+        
+        if bytes[0] == 0x03 {
+            
+            if bytes[1] == 0x06 {
+                
+                var integrityNumber = bytes[3]
+                integrityNumber = integrityNumber & 0xff
+                let echoedByte = bytes[2]
+                
+                if integrityNumber == 0xff {
+                    // disconnect
+                } else if echoedByte == 0x01 {
+                    expectedAccessKeyIntegrityNumber = integrityNumber
+                    expectedAccessKeysBlockNo = 0
+                    accessKeysString = ""
+                    state = .awaitingAccesKeysBlock
+                    getMessage = .accessKeysBlock(echoedByte: (expectedAccessKeysBlockNo & 0xff), blockNo: expectedAccessKeysBlockNo)
+                    sendGetMessage()
+                }
+            }
+        }
+    }
+    
+    func readAccessKeysBlockReply(bytes: [UInt8]) {
+        
+        if bytes[0] == 0x03 {
+            
+            if bytes[1] == 0x07 {
+                
+                let echoedByte = bytes[2]
+                let blockLength = bytes[3]
+                
+                if echoedByte == UInt8(expectedAccessKeysBlockNo & 0xff) {
+                    
+                    for i in 0..<blockLength {
+                        accessKeysString += [Character(UnicodeScalar(bytes[4 + Int(i)]))]
+                    }
+                    
+                    if blockLength < 16 {
+                        state = .awaitingKeysEndIntegReply
+                        getMessage = .accessKeysIntegrityNoAtEnd
+                    } else {
+                        expectedMiscDataStoreBlockNo += 1
+                        getMessage = .accessKeysBlock(echoedByte: (expectedAccessKeysBlockNo & 0xff), blockNo: expectedAccessKeysBlockNo)
+                    }
+                    
+                    sendGetMessage()
+                }
+            }
+        }
+    }
+    
+    func readKeysEndIntegReply(bytes: [UInt8]) {
+        
+        if bytes[0] == 0x03 {
+            
+            if bytes[1] == 0x06 {
+                
+                var integrityNumber = bytes[3]
+                integrityNumber = integrityNumber & 0xff
+                let echoedByte = bytes[2]
+                
+                if integrityNumber == 0xff {
+                    // disconnect
+                } else if echoedByte == 0x02 {
+                    
+                    if integrityNumber == expectedAccessKeyIntegrityNumber {
+                        
+                        print("AccessKeys transfer Complete")
+                        accessPoint?.accessKeys = accessKeysString
+                        
+                        if deviceFirmwareBuildNumber < 16 {
+                            state = .awaitingMapStartIntegReply
+                            getMessage = .accessMapIntegrityNoAtStart
+                        } else {
+                            state = .awaitingKeysStartIntegReply
+                            getMessage = .accessKeysIntegrityNoAtStart
+                        }
+                        
+                    } else {
+                        state = .awaitingAreaNameStartIntegReply
+                        getMessage = .areaNameIntegrityNoAtStart
+                    }
+                }
+                
+                sendGetMessage()
+            }
+        }
+    }
+    
+    
+    // MARK: Maps
+    
+    func readMapsStartIntegReply(bytes: [UInt8]) {
+        
+        if bytes[0] == 0x03 {
+            
+            if bytes[1] == 0x02 {
+                
+                var integrityNumber = bytes[3]
+                integrityNumber = integrityNumber & 0xff
+                let echoedByte = bytes[2]
+                
+                if integrityNumber == 0xff {
+                    // disconnect
+                } else if echoedByte == 0x01 {
+                    expectedAccessMapIntegrityNumber = integrityNumber
+                    expectedAccessMapBlockNo = 0
+                    accessMapString = ""
+                    state = .awaitingAccessMapBlock
+                    getMessage = .accessMapBlock(echoedByte: (expectedAccessMapBlockNo & 0xff), blockNo: expectedAccessMapBlockNo)
+                    sendGetMessage()
+                }
+            }
+        }
+    }
+    
+    func readAccessMapsBlockReply(bytes: [UInt8]) {
+        
+        if bytes[0] == 0x03 {
+            
+            if bytes[1] == 0x03 {
+                
+                let echoedByte = bytes[2]
+                let blockLength = bytes[3]
+                
+                if echoedByte == UInt8(expectedAreaNameBlockNo & 0xff) {
+                    
+                    for i in 0..<blockLength {
+                        accessMapString += [Character(UnicodeScalar(bytes[4 + Int(i)]))]
+                    }
+                    
+                    if blockLength < 16 {
+                        state = .awaitingMapEndIntegReply
+                        getMessage = .accessMapIntegrityNoAtEnd
+                    } else {
+                        expectedMiscDataStoreBlockNo += 1
+                        getMessage = .accessMapBlock(echoedByte: (expectedAccessMapBlockNo & 0xff), blockNo: expectedAccessMapBlockNo)
+                    }
+                    
+                    sendGetMessage()
+                }
+            }
+        }
+    }
+    
+    func readMapsEndIntegReply(bytes: [UInt8]) {
+        
+        if bytes[0] == 0x03 {
+            
+            if bytes[1] == 0x02 {
+                
+                var integrityNumber = bytes[3]
+                integrityNumber = integrityNumber & 0xff
+                let echoedByte = bytes[2]
+                
+                if integrityNumber == 0xff {
+                    // disconnect
+                } else if echoedByte == 0x02 {
+                    
+                    if integrityNumber == expectedAccessMapIntegrityNumber {
+                        
+                        print("Access Map transfer complete")
+                        accessPoint?.accessMap = accessMapString
+//                        accessPoint.writetoCache
+//                        nodeCacheTriggerNumberOnPrevCache = nodeCacheTriggerNumber
+                        
+                        // connectingforuser
+                        if false {
+                            
+//                            Lighting.voidAllData()
+//                            final SimmBLE2.reportedAccessPoint[] aps
+//                            aps = SimmBLE2.getInstance().reportAccessPoints();
+//                            for( int apNum=0; apNum < aps.length; apNum++ ){
+//                                if( aps[apNum].rssi > MIN_CONNECTABLE_RSSI ) {
+//                                    Lighting.processRetrievedNodeData( apNum, aps[apNum].macString );
+//                                }
+//                            }
+//
+//                            state = STATE_CONNECTED_AND_WAITING;
+//                            statusToReport = REPORTED_STATUS_CONNECTED;
+//
+//                            availableControlGroupArraysNeedRefreshing = true;
+                            
+                        } else {
+                            disconnect()
+                        }
+                        
+                        if deviceFirmwareBuildNumber < 16 {
+                            state = .awaitingAreaNameStartIntegReply
+                            getMessage = .accessMapIntegrityNoAtStart
+                        } else {
+                            state = .awaitingAreaNameStartIntegReply
+                            getMessage = .accessKeysIntegrityNoAtStart
+                        }
+                        
+                    } else {
+                        state = .awaitingAreaNameStartIntegReply
+                        getMessage = .areaNameIntegrityNoAtStart
+                        sendGetMessage()
+                    }
+                }
+                
+            }
+        }
+    }
+    
+    
     
     
     func sendLightCommand(command: NodeCommand) {
@@ -363,6 +775,54 @@ public class SimtronicBluetooth: NSObject {
         writeToCharacteristic(data: data)
     }
     
+    
+    func getHashedPassword(password: String) -> [UInt8] {
+        
+        let inputData = Data(password.utf8)
+        
+        let hash = SHA256.hash(data: inputData)
+        
+        var hashSmall: [UInt8] = []
+        
+        var hp = 0
+        var hsp = 0
+        
+        for i in 0..<4 {
+            
+            for j in 0..<4 {
+                
+                hsp += 1
+                hashSmall[hsp] = UInt8(hash[0 + hp] ^ hash[4 + hp])
+                hp += 1
+            }
+            
+            hp += 4
+        }
+        
+        var hashSmallFixed: [UInt8] = []
+//
+        hashSmallFixed[0] = hashSmall[12]
+        hashSmallFixed[1] = hashSmall[13]
+        hashSmallFixed[2] = hashSmall[14]
+        hashSmallFixed[3] = hashSmall[15]
+
+        hashSmallFixed[4] = hashSmall[8]
+        hashSmallFixed[5] = hashSmall[9]
+        hashSmallFixed[6] = hashSmall[10]
+        hashSmallFixed[7] = hashSmall[11]
+
+        hashSmallFixed[8] = hashSmall[4]
+        hashSmallFixed[9] = hashSmall[5]
+        hashSmallFixed[10] = hashSmall[6]
+        hashSmallFixed[11] = hashSmall[7]
+
+        hashSmallFixed[12] = hashSmall[0]
+        hashSmallFixed[13] = hashSmall[1]
+        hashSmallFixed[14] = hashSmall[2]
+        hashSmallFixed[15] = hashSmall[3]
+
+        return hashSmallFixed
+    }
     
 }
 
@@ -502,6 +962,8 @@ extension SimtronicBluetooth: CBCentralManagerDelegate {
             self.delegate.connected(to: peripheral)
             self.connectedDevice = peripheral
             peripheral.discoverServices(self.serviceIDs)
+            
+            self.connected(peripheral)
         }
 
     }
@@ -569,16 +1031,31 @@ extension Data {
 
 enum State {
     
+    case connected
+    
     case awaitingInfoReply
     case awaitingCompatReply
     case awaitingAuthChallenge
     case awaitingAuthResult
     
     case awaitingSpxSystemTime
+    case awaitingIdentifyAck
     
     case awaitingMiscDataStartIntegReply
     case awaitingMiscDataBlock
+    case awaitingMiscDataEndIntegReply
     
+    case awaitingAreaNameStartIntegReply
+    case awaitingAreaNameBlock
+    case awaitingAreaNameEndIntegReply
+    
+    case awaitingKeysStartIntegReply
+    case awaitingAccesKeysBlock
+    case awaitingKeysEndIntegReply
+    
+    case awaitingMapStartIntegReply
+    case awaitingAccessMapBlock
+    case awaitingMapEndIntegReply
 }
 
 enum GetMessage {
@@ -618,6 +1095,9 @@ enum GetMessage {
         case .authSolvedChallenge(let ba, let num):
             // TODO: Create function with 'keys'
             return []
+            
+            
+            
         case .identifyDevice:
             return [0x64, 0x00, 0x01, 0x02]
         case .areaNameIntegrityNoAtStart:

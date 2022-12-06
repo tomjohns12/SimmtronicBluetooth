@@ -8,6 +8,7 @@
 
 import Foundation
 import CoreBluetooth
+import CommonCrypto
 import CryptoKit
 
 public class SimtronicBluetooth: NSObject {
@@ -315,7 +316,7 @@ public class SimtronicBluetooth: NSObject {
                 keyNoToTry += 1
                 
                 // Keys.getInstance().keyCount()
-                if keyNoToTry < 10 {
+                if keyNoToTry < 2 {
                     getMessage = .authSolvedChallenge(ba: authChallengeMessage, keyNumToTry: keyNoToTry)
                     sendGetMessage()
                 } else {
@@ -775,32 +776,31 @@ public class SimtronicBluetooth: NSObject {
         writeToCharacteristic(data: data)
     }
     
-    
     func getHashedPassword(password: String) -> [UInt8] {
         
         let inputData = Data(password.utf8)
         
-        let hash = SHA256.hash(data: inputData)
+        let hash = sha256(string: password)
         
         var hashSmall: [UInt8] = []
         
         var hp = 0
         var hsp = 0
         
-        for i in 0..<4 {
+        for _ in 0..<4 {
             
-            for j in 0..<4 {
+            for _ in 0..<4 {
                 
-                hsp += 1
                 hashSmall[hsp] = UInt8(hash[0 + hp] ^ hash[4 + hp])
                 hp += 1
+                hsp += 1
             }
             
             hp += 4
         }
         
-        var hashSmallFixed: [UInt8] = []
-//
+        var hashSmallFixed: [UInt8] = Array(repeating: 16, count: 0x00)
+        
         hashSmallFixed[0] = hashSmall[12]
         hashSmallFixed[1] = hashSmall[13]
         hashSmallFixed[2] = hashSmall[14]
@@ -823,7 +823,28 @@ public class SimtronicBluetooth: NSObject {
 
         return hashSmallFixed
     }
+}
+
+func sha256(string: String) -> [UInt8] {
+    let data = Data(string.utf8)
+    var hash = [UInt8](repeating: 0,  count: Int(CC_SHA256_DIGEST_LENGTH))
+    data.withUnsafeBytes {
+        _ = CC_SHA256($0.baseAddress, CC_LONG(data.count), &hash)
+    }
+    return hash
+}
+
+func solveChallenge(challenge: [UInt8], key: [UInt8]) -> [UInt8] {
     
+    let key128 = "1234567890123456"
+    let iv = "abcdefghijklmnop"
+    
+    let aes128 = AES(key: key128, iv: iv)
+    guard let encryptedPassword = aes128?.encrypt(string: "Simmtronic") else {
+        return []
+    }
+    
+    return [UInt8](encryptedPassword)
 }
 
 public protocol DeviceDelegate {
@@ -1093,10 +1114,29 @@ enum GetMessage {
         case .authRequestChallenge:
             return [0x65, 0x02]
         case .authSolvedChallenge(let ba, let num):
-            // TODO: Create function with 'keys'
-            return []
+            
+//            byte [] keyPlusType = Keys.getInstance().key(keyNumToTry);
+//            byte[] key = Arrays.copyOfRange(keyPlusType, 1, 17);
+//            latestKeyUsedForAuth = key;
+//            byte keyType = keyPlusType[0];
+            
+            let key: [UInt8] = Array(repeating: 0x00, count: 16)
+            
+            let challenge = ba[1...17]
+            let byteCipherText: [UInt8] = Array(repeating: 0x00, count: 16)
+            
+//            byte[] byteCipherText = Auth.getInstance().solveChallenge(challenge, key);
+            
+            var array: [UInt8] = Array(repeating: 0x00, count: 19)
+            array[0] = 0x65
+            array[1] = 0x03
+            array[2] = 0x00
+            for i in 0..<16 {
+                array[i + 3] = byteCipherText[i]
+            }
             
             
+            return array
             
         case .identifyDevice:
             return [0x64, 0x00, 0x01, 0x02]
@@ -1130,3 +1170,5 @@ enum GetMessage {
     }
     
 }
+
+

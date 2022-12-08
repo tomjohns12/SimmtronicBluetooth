@@ -7,7 +7,6 @@
 
 import Foundation
 import CommonCrypto
-import CryptoSwift
 
 struct AESEncoder {
 
@@ -202,15 +201,15 @@ struct AESEncoder {
 //        return result!
 //    }
     
-    func encriptMessageWithAES(key: [UInt8], data: [UInt8]) -> String {
-        
-        do {
-            let encrypted = try AES(key: key, iv: nil, blockMode: .ECB, padding: PKCS7())
-            let ciphertext = try encrypted.encrypt(data)
-        } catch {
-            print(error)
-            return "error"
-        }
-    }
+//    func encriptMessageWithAES(key: [UInt8], data: [UInt8]) -> String {
+//
+//        do {
+//            let encrypted = try AES(key: key, iv: nil, blockMode: .ECB, padding: PKCS7())
+//            let ciphertext = try encrypted.encrypt(data)
+//        } catch {
+//            print(error)
+//            return "error"
+//        }
+//    }
     
 }

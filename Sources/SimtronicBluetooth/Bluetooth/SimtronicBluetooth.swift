@@ -11,6 +11,7 @@ import CoreBluetooth
 import CommonCrypto
 import CryptoKit
 
+
 public class SimtronicBluetooth: NSObject {
     
     
@@ -69,7 +70,6 @@ public class SimtronicBluetooth: NSObject {
         super.init()
         self.manager.retrieveConnectedPeripherals(withServices: serviceIDs)
     }
-    
     
     // MARK: - Utilities
     
@@ -336,7 +336,7 @@ public class SimtronicBluetooth: NSObject {
                 accessPoint?.accessible = true
                 
                 // connectingForUser
-                if true {
+                if false {
                     state = .awaitingSpxSystemTime
                     getMessage = .spxSystemTime
                     sendGetMessage()
@@ -385,6 +385,7 @@ public class SimtronicBluetooth: NSObject {
                 
                 if integrityNumber == 0xff {
                     // diconnect
+                    print("disconnect data start")
                 } else if echoedByte == 0x01 {
                     expectedMiscDataStoreIntegrityNumber = integrityNumber
                     expectedMiscDataStoreBlockNo = 0
@@ -411,6 +412,7 @@ public class SimtronicBluetooth: NSObject {
                     
                     for i in 0..<blockLength {
                         miscDataStoreString += [Character(UnicodeScalar(bytes[4 + Int(i)]))]
+                        print(miscDataStoreString)
                     }
                     
                     if blockLength < 16 {
@@ -440,6 +442,7 @@ public class SimtronicBluetooth: NSObject {
                 
                 if integrityNumber == 0xff {
                     // disconnect
+                    print("disconnect data end")
                 } else if echoedByte == 0x02 {
                     if integrityNumber == expectedMiscDataStoreIntegrityNumber {
                         print("MiscData transfer Complete")
@@ -839,7 +842,7 @@ extension SimtronicBluetooth: CBPeripheralDelegate {
     
     public func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
         
-        print("updated charac")
+//        print("updated charac")
         
         guard let data = characteristic.value else {
             return
@@ -856,7 +859,7 @@ extension SimtronicBluetooth: CBPeripheralDelegate {
     
     public func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
         
-        print("didWrite")
+//        print("didWrite")
     }
     
 }
@@ -1059,7 +1062,7 @@ enum GetMessage {
             
             let challenge = Array(ba[3...19])
             let tester: [UInt8] = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]
-            let result = aes.solveChallenge(challenge: tester, key: key)
+            let result = aes.solveChallenge(challenge: challenge, key: key)
             let byteCipherText = Array(result[0...16])
             
             var array: [UInt8] = Array(repeating: 0x00, count: 19)

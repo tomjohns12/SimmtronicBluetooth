@@ -7,6 +7,7 @@
 
 import Foundation
 import CommonCrypto
+import CryptoSwift
 
 struct AESEncoder {
 
@@ -150,56 +151,56 @@ struct AESEncoder {
         return cryptData
     }
     
-    func AESEncryption(key: Data) -> String? {
-            
-            let keyData: NSData! = (key as NSString).data(using: String.Encoding.utf8.rawValue) as NSData!
-            
-            let data: NSData! = (self as NSString).data(using: String.Encoding.utf8.rawValue) as NSData!
-            
-            let cryptData    = NSMutableData(length: Int(data.length) + kCCBlockSizeAES128)!
-            
-            let keyLength              = size_t(kCCKeySizeAES128)
-            let operation: CCOperation = UInt32(kCCEncrypt)
-            let algoritm:  CCAlgorithm = UInt32(kCCAlgorithmAES128)
-            let options:   CCOptions   = UInt32(kCCOptionECBMode + kCCOptionPKCS7Padding)
-            
-            var numBytesEncrypted :size_t = 0
-            
-            
-            let cryptStatus = CCCrypt(operation,
-                                      algoritm,
-                                      options,
-                                      keyData.bytes, keyLength,
-                                      nil,
-                                      data.bytes, data.length,
-                                      cryptData.mutableBytes, cryptData.length,
-                                      &numBytesEncrypted)
-            
-            if UInt32(cryptStatus) == UInt32(kCCSuccess) {
-                cryptData.length = Int(numBytesEncrypted)
-                
-                var bytes = [UInt8](repeating: 0, count: cryptData.length)
-                cryptData.getBytes(&bytes, length: cryptData.length)
-                
-                var hexString = ""
-                for byte in bytes {
-                    hexString += String(format:"%02x", UInt8(byte))
-                }
-                
-                return hexString
-            }
-            
-            return nil
-        }
+//    func AESEncryption(key: Data) -> String? {
+//
+//            let keyData: NSData! = (key as NSString).data(using: String.Encoding.utf8.rawValue) as NSData!
+//
+//            let data: NSData! = (self as NSString).data(using: String.Encoding.utf8.rawValue) as NSData!
+//
+//            let cryptData    = NSMutableData(length: Int(data.length) + kCCBlockSizeAES128)!
+//
+//            let keyLength              = size_t(kCCKeySizeAES128)
+//            let operation: CCOperation = UInt32(kCCEncrypt)
+//            let algoritm:  CCAlgorithm = UInt32(kCCAlgorithmAES128)
+//            let options:   CCOptions   = UInt32(kCCOptionECBMode + kCCOptionPKCS7Padding)
+//
+//            var numBytesEncrypted :size_t = 0
+//
+//
+//            let cryptStatus = CCCrypt(operation,
+//                                      algoritm,
+//                                      options,
+//                                      keyData.bytes, keyLength,
+//                                      nil,
+//                                      data.bytes, data.length,
+//                                      cryptData.mutableBytes, cryptData.length,
+//                                      &numBytesEncrypted)
+//
+//            if UInt32(cryptStatus) == UInt32(kCCSuccess) {
+//                cryptData.length = Int(numBytesEncrypted)
+//
+//                var bytes = [UInt8](repeating: 0, count: cryptData.length)
+//                cryptData.getBytes(&bytes, length: cryptData.length)
+//
+//                var hexString = ""
+//                for byte in bytes {
+//                    hexString += String(format:"%02x", UInt8(byte))
+//                }
+//
+//                return hexString
+//            }
+//
+//            return nil
+//        }
     
-    func aesEncrypt(_ key: String, iv: String) throws -> String {
-        let data = self.data(using: String.Encoding.utf8)
-        let enc = try AES(key: key, iv: iv, blockMode: .CBC, padding: PKCS7()).encrypt(data!.bytes)
-        let encData = Data(bytes: UnsafePointer<UInt8>(enc), count: Int(enc.count))
-        let base64String: String = encData.base64EncodedString(options: Data.Base64EncodingOptions(rawValue: 0))
-        let result = String(base64String)
-        return result!
-    }
+//    func aesEncrypt(_ key: String, iv: String) throws -> String {
+//        let data = self.data(using: String.Encoding.utf8)
+//        let enc = try AES(key: key, iv: iv, blockMode: .CBC, padding: PKCS7()).encrypt(data!.bytes)
+//        let encData = Data(bytes: UnsafePointer<UInt8>(enc), count: Int(enc.count))
+//        let base64String: String = encData.base64EncodedString(options: Data.Base64EncodingOptions(rawValue: 0))
+//        let result = String(base64String)
+//        return result!
+//    }
     
     func encriptMessageWithAES(key: [UInt8], data: [UInt8]) -> String {
         

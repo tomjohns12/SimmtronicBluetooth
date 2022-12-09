@@ -15,6 +15,8 @@ class ControlPermission {
     
     var valid = false
     
+    private lazy var utils = Utils()
+    
     init() {
         
     }
@@ -98,10 +100,10 @@ class ControlPermission {
             qrStringWithoutCommas += details[i]
         }
         
-        qrStringWithoutCommas += ""
+        qrStringWithoutCommas += utils.byteArrayToHexString(bytes: bytes)
         
         let sumSmall = getHashedString(string: qrStringWithoutCommas)
-        let hashByteArray: [UInt8] = []
+        let hashByteArray: [UInt8] = utils.hexStringToByteArray(string: qrSmallHashString)
         
         return (hashByteArray == sumSmall)
     }

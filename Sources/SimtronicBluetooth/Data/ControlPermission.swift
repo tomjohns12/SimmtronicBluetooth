@@ -8,22 +8,19 @@
 import Foundation
 import CommonCrypto
 
-class ControlPermission {
+public class ControlPermission {
     
-    var qrText = ""
-    var info = ""
-    
-    var valid = false
+    public var permission: Permission
     
     private lazy var utils = Utils()
     
-    init() {
-        
+    public init() {
+        permission = Permission()
     }
     
-    func getDetails(qrText: String) {
+    public func getDetails(qrText: String) {
         
-        self.qrText = qrText
+        permission.qrRawString = qrText
         
         let details = qrText.components(separatedBy: ",")
         let fieldCount = details.count
@@ -34,54 +31,54 @@ class ControlPermission {
                 
                 if details.last?.count == 16 {
                     
-                    valid = true
-                    info = "Control permission"
+                    permission.valid = true
+                    permission.info = "Control permission"
                     
                     if !details[1].isEmpty {
-                        info += "\nDate Created: \(details[1])"
+                        permission.info += "\nDate Created: \(details[1])"
                     }
                     
                     if !details[2].isEmpty {
-                        info += "\nJob: \(details[2])"
+                        permission.info += "\nJob: \(details[2])"
                     }
                     
                     if !details[3].isEmpty {
-                        info += "\nPermission number: \(details[3])"
+                        permission.info += "\nPermission number: \(details[3])"
                     }
                     
                     if !details[8].isEmpty {
-                        info += "\nRole: \(details[8])"
+                        permission.info += "\nRole: \(details[8])"
                     }
                     
                     if !details[10].isEmpty {
-                        info += "\nArea: \(details[10])"
+                        permission.info += "\nArea: \(details[10])"
                     }
                     
                     if !details[11].isEmpty {
-                        info += "\nArea: \(details[11])"
+                        permission.info += "\nArea: \(details[11])"
                     }
                     
                     if !details[12].isEmpty {
-                        info += "\nArea: \(details[12])"
+                        permission.info += "\nArea: \(details[12])"
                     }
                     
                     if !details[13].isEmpty {
-                        info += "\nArea: \(details[13])"
+                        permission.info += "\nArea: \(details[13])"
                     }
                     
                     if !details[22].isEmpty {
-                        info += "\nMoment A: \(details[22])"
+                        permission.info += "\nMoment A: \(details[22])"
                     }
                     
                     if !details[23].isEmpty {
-                        info += "\nMoment B: \(details[23])"
+                        permission.info += "\nMoment B: \(details[23])"
                     }
                     
                 }
             }
         }
         
-        info = "Unrcognised code"
+        permission.info = "Unrcognised code"
     }
     
     
@@ -89,7 +86,7 @@ class ControlPermission {
     
     func conrolPermissionIsGenuine(bytes: [UInt8]) -> Bool {
         
-        let details = qrText.components(separatedBy: ",")
+        let details = permission.qrRawString.components(separatedBy: ",")
         let fieldCount = details.count
         let commaCount = fieldCount - 1
         
@@ -108,7 +105,7 @@ class ControlPermission {
         return (hashByteArray == sumSmall)
     }
     
-    func getHashedString(string: String) -> [UInt8] {
+    private func getHashedString(string: String) -> [UInt8] {
         
         let hash = sha256(string: string)
         
@@ -151,7 +148,7 @@ class ControlPermission {
         return smallSum
     }
     
-    func sha256(string: String) -> [UInt8] {
+    private func sha256(string: String) -> [UInt8] {
         let data = Data(string.utf8)
         var hash = [UInt8](repeating: 0,  count: Int(CC_SHA256_DIGEST_LENGTH))
         data.withUnsafeBytes {

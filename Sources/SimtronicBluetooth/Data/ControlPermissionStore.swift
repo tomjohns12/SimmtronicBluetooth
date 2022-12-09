@@ -7,17 +7,25 @@
 
 import Foundation
 
-class ControlPermissionStore {
+public class ControlPermissionStore {
     
+    public var permissions: [Permission] = []
     
-    init() {
+    public init() {
         
     }
     
-    func addToStore(qrString: String) -> Bool {
+    public func addToStore(permission: Permission) -> Bool {
+        
         
         
         return true
+    }
+    
+    public func getFromStore() {
+        
+        
+        
     }
     
 }
